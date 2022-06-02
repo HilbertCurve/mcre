@@ -1,18 +1,21 @@
 mod grid;
 mod block;
+mod utils;
 
 use std::error::Error;
 
-use crate::grid::Grid;
+use crate::grid::*;
+use crate::block::*;
+use crate::utils::ParseError;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut g = Grid::new(1, 2, 3);
-    g.write("/tmp/lmao")?;
-    g.read("/tmp/lmao")?;
+    let mut grid = Grid::new();
 
-    assert!(g.x_len == 1, "bad x after read");
-    assert!(g.y_len == 2, "bad y after read");
-    assert!(g.z_len == 3, "bad z after read");
+    grid.resize(2, 3, 1);
+    grid.write("/tmp/test_world")?;
+    grid.read("/tmp/test_world")?;
+    grid.write("/tmp/test_world1")?;
+
 
     Ok(())
 }

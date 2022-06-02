@@ -3,39 +3,55 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter, Write, Read};
 use std::mem;
 
-use crate::block::Block;
+use crate::block::{Block, BlockState};
 
 pub struct Grid {
-    grid: Vec<Vec<Vec<Block>>>,
-    pub x_len: u32,
-    pub y_len: u32,
-    pub z_len: u32,
+    blocks: Vec<Vec<Vec<Block>>>,
+    x_len: u32,
+    y_len: u32,
+    z_len: u32,
 }
 
-impl Grid {
-    const HEADER: [u8; 4] = ['m' as u8, 'c' as u8, 'r' as u8, 's' as u8];
+/* file format specs in bytes:
+ *
+ * Bytes 1-4: these spell out "mcrs" in ascii char codes
+ * Bytes 5-12: width, height, and depth (x, y, z) dimension lengths, as ints
+ * Bytes 13-end: data
+ * Data packets consist of:
+ * First byte: BlockStateID, see src/block.rs
+ * Next bytes: encode block state, length dependent on value of first byte
+ */
 
-    pub fn new(x_len: u32, y_len: u32, z_len: u32) -> Grid {
+impl Grid {
+    const HEADER: [u8; 4] = [b'm', b'c', b'r', b's'];
+
+    pub fn new() -> Grid {
         Grid {
-            grid: vec![vec![vec![Block::new(0); z_len as usize]; y_len as usize]; x_len as usize],
-            x_len, y_len, z_len
+            blocks: vec![vec![vec![]]],
+            x_len: 0,
+            y_len: 0,
+            z_len: 0,
         }
     }
 
-    pub fn get(&self, x: usize, y: usize, z: usize) -> &Block {
-        &self.grid[x][y][z]
+    pub fn resize(&mut self, x_len: u32, y_len: u32, z_len: u32) {
+        self.blocks = vec![vec![vec![
+            Block::new(BlockState::NonBlock); 
+        x_len as usize]; y_len as usize]; z_len as usize];
+
+        self.x_len = x_len;
+        self.y_len = y_len;
+        self.z_len = z_len;
     }
 
-    pub fn get_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-        &mut self.grid[x][y][z]
+    pub fn get(&mut self, x: u32, y: u32, z: u32) -> &Block {
+        &self.blocks[x as usize][y as usize][z as usize]
     }
 
-    /* file format specs in bytes:
-     *
-     * Bytes 1-4: these spell out "mcrs" in ascii char codes
-     * Bytes 5-12: width, height, and depth (x, y, z) dimension lengths, as ints
-     * Bytes 13-end: data
-     */
+    fn get_mut(&mut self, x: u32, y: u32, z: u32) -> &mut Block {
+        &mut self.blocks[x as usize][y as usize][z as usize]
+    }
+
     pub fn write(&self, fp: &str) -> io::Result<()> {
         let f = File::create(fp)?;
 
@@ -47,11 +63,11 @@ impl Grid {
             // interesting transmute hmm
             unsafe { buf.write_all(&mem::transmute::<[u32; 3], [u8; 12]>(dimensions))?; }
 
-            for x in &self.grid {
+            for x in &self.blocks {
                 for y in x {
                     for block in y {
                         let bytes = unsafe {
-                            mem::transmute::<u32, [u8; 4]>(block.id)
+                            block.get_byte_repr()
                         };
                         buf.write_all(&bytes)?;
                     }
@@ -82,11 +98,20 @@ impl Grid {
             mem::transmute::<&[u8; 12], &[u32; 3]>(slice)
         };
 
-        // TODO: populate arrays
+        self.resize(dimensions[0], dimensions[1], dimensions[2]);
 
-        self.x_len = dimensions[0];
-        self.y_len = dimensions[1];
-        self.z_len = dimensions[2];
+        // remove header from current buffer
+        buf.drain(..16);
+
+        for i in 0..self.x_len {
+            for j in 0..self.y_len {
+                for k in 0..self.z_len {
+                    // store integer value into each item
+                    let consumed = self.get_mut(i, j, k).try_set(&buf)?;
+                    buf.drain(..consumed);
+                }
+            }
+        }
 
         Ok(())
     }
