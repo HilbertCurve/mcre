@@ -23,9 +23,24 @@ impl ParseError {
     }
 }
 
+pub mod math {
+    use super::ParseError;
+
+    /// input is u64 because upcasting isn't lossy (even if it's probably not necessary)
+    pub fn to_bool(val: u64) -> Result<bool, ParseError> {
+        if val == 0 {
+            Ok(false)
+        } else if val == 1 {
+            Ok(true)
+        } else {
+            Err(ParseError::from("invalid number, cannot convert to bool"))
+        }
+    }
+}
+
 // TODO: better file io; writing binary files
 
-mod binio {
+pub mod binio {
     use std::fs::File;
     use std::io::{self, BufWriter, Write, Read};
     use std::mem;
@@ -44,6 +59,19 @@ mod binio {
         };
 
         writer.write_all(bytes)?;
+        Ok(())
+    }
+
+    // more of a debug method, not very fast, but used for directly
+    // constructing .mcrs files
+    pub fn write_bytes(bytes: &[u8], fp: &str) -> io::Result<()> {
+        let file: File = File::create(fp)?;
+
+        {
+            let mut buf = BufWriter::new(file);
+            buf.write_all(bytes)?;
+        }
+
         Ok(())
     }
 

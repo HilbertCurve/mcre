@@ -5,6 +5,7 @@ use std::mem;
 
 use crate::block::{Block, BlockState};
 
+#[derive(Debug)]
 pub struct Grid {
     blocks: Vec<Vec<Vec<Block>>>,
     x_len: u32,
@@ -45,11 +46,11 @@ impl Grid {
     }
 
     pub fn get(&mut self, x: u32, y: u32, z: u32) -> &Block {
-        &self.blocks[x as usize][y as usize][z as usize]
+        &self.blocks[z as usize][y as usize][x as usize]
     }
 
     fn get_mut(&mut self, x: u32, y: u32, z: u32) -> &mut Block {
-        &mut self.blocks[x as usize][y as usize][z as usize]
+        &mut self.blocks[z as usize][y as usize][x as usize]
     }
 
     pub fn write(&self, fp: &str) -> io::Result<()> {
@@ -66,9 +67,7 @@ impl Grid {
             for x in &self.blocks {
                 for y in x {
                     for block in y {
-                        let bytes = unsafe {
-                            block.get_byte_repr()
-                        };
+                        let bytes = block.get_byte_repr();
                         buf.write_all(&bytes)?;
                     }
                 }
@@ -103,11 +102,11 @@ impl Grid {
         // remove header from current buffer
         buf.drain(..16);
 
-        for i in 0..self.x_len {
+        for i in 0..self.z_len {
             for j in 0..self.y_len {
-                for k in 0..self.z_len {
+                for k in 0..self.x_len {
                     // store integer value into each item
-                    let consumed = self.get_mut(i, j, k).try_set(&buf)?;
+                    let consumed = self.get_mut(k, j, i).try_set(&buf)?;
                     buf.drain(..consumed);
                 }
             }
